@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dpg-store
+spec:
+  selector:
+    matchLabels:
+      app: dpg-store
+      environment: preprod
+      version: main
+  template:
+    metadata:
+      labels:
+        app: dpg-store
+        environment: preprod
+        istio.io/rev: 1-13
+        kubernetes.azure.com/agentpool: app
+        version: main
+    spec:
+      containers:
+      - env:
+        - name: Commerce__ProjectKey
+          value: dpg-ecomm-preprod
+        - name: NEW_RELIC_DISTRIBUTED_TRACING_ENABLED
+          value: "true"
+        - name: NEW_RELIC_APP_NAME
+          value: dpg-store-preprod,dpg-store-preprod-aks-01
+        - name: NEW_RELIC_LICENSE_KEY
+          valueFrom:
+            secretKeyRef:
+              key: newRelicLicense
+              name: dpg-store-key-vault-secret
+        image: crreguksbd01.azurecr.io/dpg-store-api:ce1d6c256d2dc1f97f3133c3b71eba6752d21d3b
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 6600
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 2
+        name: dpg-store
+        ports:
+        - containerPort: 6600
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 6600
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 450Mi
+          requests:
+            cpu: 30m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - all
+          privileged: false
+          runAsGroup: 10000
+          runAsNonRoot: true
+          runAsUser: 10000
+        volumeMounts:
+        - mountPath: /app/config
+          name: key-vault-secret-store
+          readOnly: true
+      serviceAccountName: dpg-store-sa
+      volumes:
+      - csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: dpg-store-key-vault-sync
+        name: key-vault-secret-store
